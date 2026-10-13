@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>دستیار هوش مصنوعی</title>
+  <style>
+    :root {
+      --bg: #0c1220;
+      --surface: #1a2238;
+      --surface2: #232d4e;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --border: #2d3b5e;
+      --msg-user-bg: #3b82f6;
+      --msg-user-text: #ffffff;
+      --msg-ai-bg: var(--surface2);
+      --msg-ai-text: var(--text);
+      --msg-tool-bg: #232d4e;
+      --msg-tool-text: #38bdf8;
+      --msg-error-bg: #991b1b;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Tahoma, Segoe UI, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .title { font-weight: 600; font-size: 15px; color: var(--primary); }
+    .title span { color: var(--text); }
+    .header-actions { display: flex; gap: 8px; }
+
+    /* Status badges */
+    .badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .badge-status { background: var(--surface2); color: var(--text); }
+    .badge-model { background: #059669; color: white; }
+
+    /* Chat area */
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .empty { text-align: center; color: var(--text-muted); padding: 48px; font-size: 14px; }
+
+    /* Messages */
+    .message {
+      max-width: 85%;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .message.user { align-self: flex-start; flex-direction: row-reverse; }
+    .message.ai { align-self: flex-start; }
+    .message.tool { align-self: flex-start; }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .msg-user-bg { background: var(--msg-user-bg); }
+    .msg-ai-bg { background: var(--msg-ai-bg); }
+    .msg-tool-bg { background: var(--msg-tool-bg); }
+    .msg-error-bg { background: var(--msg-error-bg); }
+
+    .bubble {
+      background: var(--msg-user-bg);
+      color: var(--msg-user-text);
+      padding: 10px 14px;
+      border-radius: 18px 18px 4px 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+    .message.ai .bubble { background: var(--msg-ai-bg); color: var(--msg-ai-text); border-radius: 18px 18px 18px 4px; }
+    .message.tool .bubble { background: var(--msg-tool-bg); color: var(--msg-tool-text); border-radius: 18px 18px 18px 4px; font-size: 13px; }
+    .message.error .bubble { background: var(--msg-error-bg); color: #fee2e2; border-radius: 18px; }
+
+    /* Input area */
+    .input-area {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+    textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      color: var(--text);
+      padding: 12px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: none;
+      min-height: 52px;
+      max-height: 140px;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--primary); }
+    textarea::placeholder { color: var(--text-muted); }
+
+    .send-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .send-btn:hover { background: var(--primary-hover); }
+    .send-btn:disabled { background: var(--border); opacity: 0.5; cursor: not-allowed; }
+    .send-btn svg { width: 20px; height: 20px; stroke: white; stroke-width: 2.5; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-title { font-weight: 600; font-size: 15px; }
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 18px;
+    }
+    .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+    .modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .modal-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .modal-btn:hover { background: var(--border); }
+    .modal-btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+    .modal-btn-primary:hover { background: var(--primary-hover); }
+
+    /* Forms */
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .form-input, .form-select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--primary); }
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Loading indicator */
+    .typing {
+      color: var(--text-muted);
+      font-size: 13px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <span class="title">دستیار هوش مصنوعی</span>
+    <div class="header-actions">
+      <div class="badge badge-status" id="statusBadge">
+        <span>●</span>
+        <span id="statusText">آماده</span>
+      </div>
+      <div class="badge badge-model" id="modelBadge">
+        مدل: <span id="modelText">—</span>
+      </div>
+      <button class="modal-btn" onclick="openSettings()">تنظیمات</button>
+      <button class="modal-btn" onclick="clearChat()">پاک کردن چت</button>
+    </div>
+  </header>
+
+  <div class="chat" id="chat">
+    <div class="empty">
+      <p>سلام! چه کاری می‌تونم برات انجام بدم؟</p>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea 
+        id="input" 
+        placeholder="پیام خود را بنویسید..."
+        rows="1"
+        onkeydown="handleKeydown(event)"
+        oninput="autoResize(this)"
+      ></textarea>
+    </div>
+    <button class="send-btn" id="sendBtn" onclick="send()">
+      <svg viewBox="0 0 24 24" fill="none"><polyline points="22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">تنظیمات اتصال</span>
+        <button class="close-btn" onclick="closeSettings()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Base URL (آدرس سرور)</label>
+          <input type="url" class="form-input" id="baseUrl" placeholder="http://localhost:20128/v1">
+          <div class="form-hint">آدرس API شما (مثلاً 9Router)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <input type="password" class="form-input" id="apiKey" placeholder="کلید API (اختیاری)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">مدل</label>
+          <input type="text" class="form-input" id="model" placeholder="نام مدل (مثلاً gpt-4o)">
+        </div>
+        <button class="modal-btn" style="align-self: flex-start;" onclick="fetchModels()">دریافت مدل‌ها</button>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" onclick="closeSettings()">انصراف</button>
+        <button class="modal-btn modal-btn-primary" onclick="saveSettings()">ذخیره</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let config = {
+      baseUrl: localStorage.getItem('assistant_base_url') || '',
+      apiKey: localStorage.getItem('assistant_api_key') || '',
+      model: localStorage.getItem('assistant_model') || ''
+    };
+    let history = JSON.parse(localStorage.getItem('assistant_history') || '[]');
+    let currentMsgId = null;
+    let isLoading = false;
+
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+    const settingsModal = document.getElementById('settingsModal');
+
+    function saveConfig() {
+      localStorage.setItem('assistant_base_url', config.baseUrl);
+      localStorage.setItem('assistant_api_key', config.apiKey);
+      localStorage.setItem('assistant_model', config.model);
+      updateBadges();
+    }
+
+    function updateBadges() {
+      document.getElementById('statusText').textContent = config.baseUrl ? 'متصل' : 'غیرمتصل';
+      document.getElementById('modelText').textContent = config.model || '—';
+    }
+
+    function openSettings() {
+      document.getElementById('baseUrl').value = config.baseUrl;
+      document.getElementById('apiKey').value = '';
+      document.getElementById('model').value = config.model;
+      settingsModal.classList.add('active');
+    }
+
+    function closeSettings() {
+      settingsModal.classList.remove('active');
+    }
+
+    async function fetchModels() {
+      const baseUrl = document.getElementById('baseUrl').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim() || 'sk-local';
+      const modelInput = document.getElementById('model');
+      if (!baseUrl) {
+        alert('لطفاً Base URL را وارد کنید.');
+        return;
+      }
+
+      const btn = document.querySelector('#settingsModal button:nth-child(4)');
+      btn.disabled = true;
+      btn.textContent = 'در حال دریافت...';
+
+      try {
+        const response = await fetch(`${baseUrl}/v1/models`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const data = await response.json();
+        const models = data.data || [];
+        modelInput.innerHTML = models.map(m => `<option value="${m.id}">${m.id}</option>`).join('');
+      } catch (err) {
+        alert('خطا در دریافت مدل‌ها: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'دریافت مدل‌ها';
+      }
+    }
+
+    function saveSettings() {
+      config.baseUrl = document.getElementById('baseUrl').value.trim();
+      config.apiKey = document.getElementById('apiKey').value.trim();
+      config.model = document.getElementById('model').value.trim();
+      saveConfig();
+      closeSettings();
+      appendMessage('system', 'تنظیمات ذخیره شد.');
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+    }
+
+    function handleKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    }
+
+    function appendMessage(who, text) {
+      const msg = document.createElement('div');
+      msg.className = `message ${who}`;
+      msg.innerHTML = `
+        <div class="avatar msg-${who}-bg">${getattr(who, 'icon', '')}</div>
+        <div class="bubble">${highlightMarkdown(text)}</div>
+      `;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+      return msg;
+    }
+
+    function appendTyping() {
+      const id = 'typing-' + Date.now();
+      const msg = document.createElement('div');
+      msg.className = 'message ai typing-msg';
+      msg.id = id;
+      msg.innerHTML = `
+        <div class="avatar msg-ai-bg">🤖</div>
+        <div class="bubble typing">در حال فکر کردن...</div>
+      `;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+      return id;
+    }
+
+    function removeTyping(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      if (!config.model) {
+        alert('لطفاً ابتدا مدل را در تنظیمات انتخاب کنید.');
+        openSettings();
+        return;
+      }
+
+      if (!config.baseUrl) {
+        alert('لطفاً Base URL را در تنظیمات وارد کنید.');
+        openSettings();
+        return;
+      }
+
+      input.value = '';
+      autoResize(input);
+
+      // Save user message
+      history.push({ role: 'user', content: text });
+      localStorage.setItem('assistant_history', JSON.stringify(history));
+
+      appendMessage('user', text);
+      sendBtn.disabled = true;
+
+      const typingId = appendTyping();
+
+      try {
+        const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: [
+              { role: 'system', content: 'You are a helpful Windows personal assistant. Reply in the same language the user writes in.' }
+            ].concat(history),
+            tools: [
+              { type: 'function', function: { name: 'open_app', description: 'Open an Windows app', parameters: { type: 'object', properties: { name: { type: 'string', enum: ['notepad', 'calculator', 'paint', 'explorer', 'cmd'] } }, required: ['name'] } } },
+              { type: 'function', function: { name: 'open_url', description: 'Open a website', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
+              { type: 'function', function: { name: 'save_note', description: 'Save a note', parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['title', 'content'] } } },
+              { type: 'function', function: { name: 'list_notes', description: 'List notes' } },
+              { type: 'function', function: { name: 'read_note', description: 'Read a note', parameters: { type: 'object', properties: { filename: { type: 'string' } }, required: ['filename'] } } },
+              { type: 'function', function: { name: 'current_time', description: 'Get current time' } }
+            ]
+          })
+        });
+
+        const data = await response.json();
+        removeTyping(typingId);
+
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+        const msg = data.choices[0]?.message || {};
+        const toolCalls = msg.tool_calls || [];
+
+        if (toolCalls.length === 0) {
+          history.push({ role: 'assistant', content: msg.content || '' });
+          localStorage.setItem('assistant_history', JSON.stringify(history));
+          appendMessage('ai', msg.content || '(بدون پاسخ)');
+        } else {
+          // Save assistant message with tool calls
+          history.push({
+            role: 'assistant',
+            content: msg.content || '',
+            tool_calls: toolCalls.map(tc => ({
+              id: tc.id,
+              type: 'function',
+              function: { name: tc.function.name, arguments: tc.function.arguments }
+            }))
+          });
+
+          for (const tc of toolCalls) {
+            let args = {};
+            try {
+              args = JSON.parse(tc.function.arguments || '{}');
+            } catch (e) {}
+
+            const result = await executeTool(tc.function.name, args);
+            localStorage.setItem('assistant_history', JSON.stringify(history));
+            appendMessage('tool', `${tc.function.name}: ${result.substring(0, 120)}...`);
+
+            history.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: result
+            });
+
+            await sleep(300);
+          }
+
+          // Get final response
+          const finalRes = await fetch(`${config.baseUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.apiKey}`
+            },
+            body: JSON.stringify({
+              model: config.model,
+              messages: [
+                { role: 'system', content: 'You are a helpful Windows personal assistant. Reply in the same language the user writes in.' }
+              ].concat(history)
+            })
+          });
+
+          const finalData = await finalRes.json();
+          const finalMsg = finalData.choices[0]?.message?.content || '(بدون پاسخ)';
+          appendMessage('ai', finalMsg);
+        }
+      } catch (err) {
+        removeTyping(typingId);
+        appendMessage('error', 'خطا: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function getattr(obj, key, default_ = '') {
+      return obj?.[key] ?? default_;
+    }
+
+    async function executeTool(name, args) {
+      try {
+        if (name === 'open_app') {
+          if (['notepad', 'calculator', 'paint', 'explorer', 'cmd'].includes(args.name)) {
+            await fetch(`http://localhost:9222/open`, {
+              method: 'POST',
+              headers: { 'Content-Type': ' application/json' },
+              body: JSON.stringify({ app: args.name.replace(/\.exe$/, '') })
+            });
+            return `Opened ${args.name}`;
+          }
+          return 'App not allowed';
+        }
+        if (name === 'open_url') {
+          let url = args.url;
+          if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
+          await fetch(`http://localhost:9222/open`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          return `Opened ${url}`;
+        }
+        if (name === 'save_note') {
+          const fname = new Date().toISOString().replace(/[:.]/g, '-').replace(/T/, '-').replace(/\.\d+$/, '') + '_' + sanitize(args.title).slice(0, 60);
+          await fetch(`http://localhost:9222/note`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: fname, content: args.content })
+          });
+          return `Saved as ${fname}`;
+        }
+        if (name === 'list_notes') {
+          const data = await fetch(`http://localhost:9222/notes`).then(r => r.text());
+          return JSON.parse(data).join(', ') || 'No notes yet';
+        }
+        if (name === 'read_note') {
+          let filename = args.filename;
+          if (!filename.match(/\.(txt|md)$/i)) filename += '.txt';
+          const data = await fetch(`http://localhost:9222/note?filename=${encodeURIComponent(filename)}`).then(r => r.text());
+          return JSON.parse(data).content || '';
+        }
+        if (name === 'current_time') {
+          return new Date().toLocaleString('fa-IR');
+        }
+        return 'Unknown tool';
+      } catch (e) {
+        return 'Error: ' + e.message;
+      }
+    }
+
+    function sanitize(name) {
+      return name.replace(/[^\w\s\-_.]/g, '').substring(0, 60) || 'note';
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function clearChat() {
+      if (!confirm('آیا می‌خواهید تمام تاریخچه را پاک کنید؟')) return;
+      history = [];
+      localStorage.removeItem('assistant_history');
+      chat.innerHTML = '<div class="empty"><p>سلام! چه کاری می‌تونم برات انجام بدم؟</p></div>';
+    }
+
+    function highlightMarkdown(text) {
+      if (!text) return '';
+      return text
+        .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1);padding:2px 4px;border-radius:4px;font-size:0.9em;">$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/\s*\n\s*/g, '<br>');
+    }
+
+    updateBadges();
+    input.focus();
+  </script>
+</body>
+</html>
